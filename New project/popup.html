@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI-Privacy Sentinel</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 340px;
+        min-height: 360px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #020617 0, #020617 40%, #000 100%);
+        color: #e5e7eb;
+      }
+
+      .shell {
+        padding: 10px 12px 12px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .shield {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 30% 0, #fca5a5, #b91c1c);
+        box-shadow:
+          0 0 0 1px rgba(248, 113, 113, 0.35),
+          0 4px 12px rgba(127, 29, 29, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      }
+
+      .title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .subtitle {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .badge {
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        font-size: 10px;
+        color: #9ca3af;
+      }
+
+      .card {
+        margin-top: 8px;
+        border-radius: 12px;
+        padding: 10px 10px 9px;
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid rgba(31, 41, 55, 0.9);
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .row:last-child {
+        margin-bottom: 0;
+      }
+
+      .row-label {
+        font-size: 12px;
+      }
+
+      .row-hint {
+        font-size: 10px;
+        color: #9ca3af;
+      }
+
+      .status-pill {
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .status-on {
+        background: rgba(22, 163, 74, 0.16);
+        color: #bbf7d0;
+        border: 1px solid rgba(34, 197, 94, 0.6);
+      }
+
+      .status-off {
+        background: rgba(148, 163, 184, 0.16);
+        color: #e5e7eb;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+      }
+
+      .subtitle-compact {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
+      }
+    </style>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <div class="header">
+        <div class="brand">
+          <div class="shield">🛡️</div>
+          <div>
+            <div class="title">AI-Privacy Sentinel</div>
+            <div class="subtitle" id="subtitle">Статус на этом сайте определяется…</div>
+            <div class="subtitle-compact" id="scopeHint"></div>
+          </div>
+        </div>
+        <span class="badge" id="statusPill">—</span>
+      </div>
+
+      <div class="subtitle-compact" id="hostname" style="margin-bottom: 6px;"></div>
+
+      <section class="body">
+        <section class="section" aria-labelledby="scope-title">
+          <div class="section-header">
+            <h2 id="scope-title" class="section-title">Где работать</h2>
+            <span class="badge">область действия</span>
+          </div>
+          <p class="section-description">
+            Определи, на каких сайтах расширение будет анализировать поля ввода.
+          </p>
+
+          <div class="settings-list">
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Во всём браузере</span>
+                <span class="setting-hint">Анализировать текстовые поля на всех сайтах</span>
+              </div>
+              <input id="scope-global" type="radio" name="scope-mode" />
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Только в LLM‑чатах</span>
+                <span class="setting-hint">ChatGPT, Claude, Gemini (и другие, добавленные в код)</span>
+              </div>
+              <input id="scope-llm" type="radio" name="scope-mode" />
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Только на выбранных сайтах</span>
+                <span class="setting-hint">Укажи домены через запятую или с новой строки</span>
+              </div>
+              <input id="scope-custom" type="radio" name="scope-mode" />
+            </label>
+
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Список сайтов</span>
+                <span class="setting-hint">Например: chatgpt.com, my.company.com</span>
+              </div>
+            </div>
+            <textarea
+              id="scope-custom-list"
+              rows="2"
+              style="width: 100%; resize: vertical; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.5); background: rgba(15, 23, 42, 0.8); color: #e5e7eb; font-size: 12px; padding: 8px;"
+            ></textarea>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="types-title">
+          <div class="section-header">
+            <h2 id="types-title" class="section-title">Типы данных</h2>
+            <span class="badge">детектор</span>
+          </div>
+          <p class="section-description">Что считать чувствительными данными на всех сайтах.</p>
+
+          <div class="settings-list">
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Email‑адреса</span>
+                <span class="setting-hint">Например: name@company.com</span>
+              </div>
+              <span class="switch">
+                <input id="scan-email" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">API‑ключи и токены</span>
+                <span class="setting-hint">sk‑, ghp_, xoxb‑, AIza…</span>
+              </div>
+              <span class="switch">
+                <input id="scan-apiKey" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">JWT‑токены</span>
+                <span class="setting-hint">Формат header.payload.signature</span>
+              </div>
+              <span class="switch">
+                <input id="scan-jwt" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Номера банковских карт</span>
+                <span class="setting-hint">С проверкой по алгоритму Луна</span>
+              </div>
+              <span class="switch">
+                <input id="scan-card" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="exceptions-title">
+          <div class="section-header">
+            <h2 id="exceptions-title" class="section-title">Исключения</h2>
+            <span class="badge">по умолчанию включены</span>
+          </div>
+          <p class="section-description">
+            Сайты, где анализ не выполняется (почта, анкеты, формы регистрации и т.п.).
+          </p>
+
+          <div class="settings-list">
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Не анализировать на указанных сайтах</span>
+                <span class="setting-hint">Рекомендуется оставить включённым</span>
+              </div>
+              <span class="switch">
+                <input id="exc-enabled" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Список исключений</span>
+                <span class="setting-hint">Домены через запятую или с новой строки</span>
+              </div>
+            </div>
+            <textarea
+              id="exc-hosts"
+              rows="2"
+              style="width: 100%; resize: vertical; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.5); background: rgba(15, 23, 42, 0.8); color: #e5e7eb; font-size: 12px; padding: 8px;"
+            ></textarea>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="mode-title">
+          <div class="section-header">
+            <h2 id="mode-title" class="section-title">Режим перед отправкой</h2>
+            <span class="badge badge-strong">строгий рекомендован</span>
+          </div>
+          <p class="section-description">Что делать, если в тексте остаются секреты.</p>
+
+          <div class="settings-list">
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Строгий режим</span>
+                <span class="setting-hint">Блокировать отправку и показывать окно</span>
+              </div>
+              <span class="switch">
+                <input id="mode-strict" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Автоматически маскировать при отправке</span>
+                <span class="setting-hint">Без лишних вопросов заменить и отправить</span>
+              </div>
+              <span class="switch">
+                <input id="auto-mask" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+
+            <label class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-label">Спрашивать перед авто‑маскировкой</span>
+                <span class="setting-hint">Показывать окно «Заменить текст масками?»</span>
+              </div>
+              <span class="switch">
+                <input id="mode-autoMaskConfirm" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <div class="footer" id="status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <script src="options.js"></script>
+    </style>
+    <script src="popup.js"></script>
+  </body>
+  </html>
+
