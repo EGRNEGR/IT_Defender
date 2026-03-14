@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI-Privacy Sentinel</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07131c;
+        --card: rgba(10, 26, 38, 0.9);
+        --text: #edf4f7;
+        --muted: #9db1bb;
+        --line: rgba(255,255,255,0.1);
+        --reject: #ff876f;
+        --proceed: #8fd0a7;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        width: 360px;
+        min-height: 420px;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(255, 135, 111, 0.22), transparent 32%),
+          linear-gradient(180deg, #07131c 0%, #02080c 100%);
+      }
+      .shell { padding: 18px; }
+      .hero {
+        padding: 18px;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+        border: 1px solid var(--line);
+      }
+      .kicker { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+      h1 { margin: 10px 0 6px; font-size: 22px; line-height: 1; }
+      .muted { color: var(--muted); font-size: 13px; line-height: 1.5; }
+      .pill {
+        display: inline-flex;
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .pill.reject { background: rgba(255, 135, 111, 0.14); color: var(--reject); }
+      .pill.proceed { background: rgba(143, 208, 167, 0.14); color: var(--proceed); }
+      .section {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 22px;
+        background: var(--card);
+        border: 1px solid var(--line);
+      }
+      .section h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+      ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+      li { padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+      li strong { display: block; font-size: 13px; margin-bottom: 4px; }
+      li span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+      .actions { display: flex; gap: 10px; margin-top: 14px; }
+      button {
+        flex: 1;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font: 600 13px/1 "IBM Plex Sans", "Segoe UI", sans-serif;
+        cursor: pointer;
+      }
+      .primary { background: #edf4f7; color: #07131c; }
+      .secondary { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.12); }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="kicker">L1 Threat Intel</div>
+        <h1 id="hostname">Текущая страница</h1>
+        <p class="muted" id="summary">Проверяю текущий адрес…</p>
+        <div id="verdict" class="pill proceed">РАЗРЕШИТЬ</div>
+      </section>
+
+      <section class="section">
+        <h2>Сработавшие источники</h2>
+        <ul id="flagged-list"></ul>
+        <div class="actions">
+          <button id="scan-now" class="primary">Проверить сейчас</button>
+          <button id="open-options" class="secondary">Настройки</button>
+        </div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

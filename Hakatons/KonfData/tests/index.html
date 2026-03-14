@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI-Privacy Sentinel Tests</title>
+    <style>
+      body { font-family: "IBM Plex Sans", "Segoe UI", sans-serif; margin: 0; padding: 24px; background: #081118; color: #edf4f7; }
+      .shell { max-width: 820px; margin: 0 auto; }
+      .case { padding: 12px 14px; border-radius: 14px; margin-bottom: 10px; }
+      .pass { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.28); }
+      .fail { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.28); }
+      code { color: #ffb4a2; }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <h1>AI-Privacy Sentinel Test Runner</h1>
+      <p>Open this file in a Chromium tab or extension page to validate the pure logic modules.</p>
+      <div id="results"></div>
+    </main>
+    <script type="module">
+      import { runTests } from "./test-utils.js";
+      import { domainTests } from "./domain.test.js";
+      import { matcherTests } from "./matchers.test.js";
+      import { aggregateTests } from "./aggregate.test.js";
+      import { cacheTests } from "./cache.test.js";
+
+      const results = await runTests([...domainTests, ...matcherTests, ...aggregateTests, ...cacheTests]);
+      const root = document.getElementById("results");
+      root.innerHTML = results
+        .map((item) => `<div class="case ${item.ok ? "pass" : "fail"}"><strong>${item.ok ? "PASS" : "FAIL"}</strong> ${item.name}${item.error ? `<div><code>${item.error}</code></div>` : ""}</div>`)
+        .join("");
+    </script>
+  </body>
+</html>
