@@ -1,0 +1,413 @@
+You are an expert Chrome Extension engineer and UI/UX designer. Your goal is to recreate, from scratch, a production-quality Manifest V3 browser extension called **AI-Privacy Sentinel** that prevents accidental disclosure of secrets and PII in text inputs (including LLM chat UIs). Build it as a small, dependency-free (vanilla JS/HTML/CSS) extension.
+
+You must deliver a working, load-unpacked extension with the file structure and behavior described below. Keep the implementation readable and robust. Do not use external services, do not make network calls, and do not add third-party libraries.
+
+---
+## 1) Product overview (what we are building)
+
+### 1.1 Purpose
+- The extension locally analyzes user-entered text **inside web pages** to detect potentially sensitive information (PII/secrets).
+- When sensitive data is detected, it:
+  - Visually highlights the risky input field (outline and subtle glow).
+  - Shows a small “shield” floating UI near the field with a count of findings.
+  - Optionally **blocks message sending** (strict mode) or **auto-masks** sensitive values before sending.
+
+### 1.2 Where it operates (scope modes)
+The extension supports 3 scope modes (configured via Options UI and reflected in Popup UI):
+- **LLM-only** (default): runs only on known LLM chat domains:
+  - `chatgpt.com`
+  - `chat.openai.com`
+  - `claude.ai`
+  - `gemini.google.com`
+- **Global**: runs on all websites.
+- **Custom allowlist**: runs only on user-provided hostnames/domains.
+
+### 1.3 Exceptions (blocklist)
+Even in Global mode, the extension can be disabled on a list of “exception” sites (defaults aimed at email/login/docs/forms):
+- Enabled by default.
+- Default exception hosts include:
+  - `mail.google.com`, `outlook.live.com`, `mail.yahoo.com`, `proton.me`
+  - `accounts.google.com`, `login.live.com`, `id.apple.com`
+  - `docs.google.com`, `forms.gle`
+
+The exception logic must match exact host or subdomain match:
+- `example.com` matches `example.com` and `sub.example.com`.
+
+---
+## 2) Functional requirements (detailed)
+
+### 2.1 Supported input fields to analyze
+Monitor these editable surfaces:
+- `textarea`
+- `input`
+- `[contenteditable="true"]` (LLM chat editors often use this)
+
+Define a single selector constant:
+- `FIELD_SELECTOR = '[contenteditable="true"], textarea, input'`
+
+### 2.2 Events to analyze
+- On user typing and paste:
+  - Use capturing listeners (`true`) for robustness.
+  - For each `input`/`paste` event, find the closest element matching `FIELD_SELECTOR` and analyze its current text.
+
+### 2.3 Dynamic DOM support
+Modern LLM sites insert fields dynamically. Use a `MutationObserver` to:
+- Watch `document.documentElement` with `{ childList: true, subtree: true }`.
+- For any added node:
+  - If it matches `FIELD_SELECTOR`, attach listeners.
+  - Also scan inside it for nested fields and attach listeners.
+
+### 2.4 Detection types
+Implement a local detector module (no dependencies) that finds:
+- **Email addresses**
+- **Common API keys / tokens** by known prefixes:
+  - OpenAI style `sk-...`
+  - GitHub `ghp_...`
+  - Slack bot `xoxb-...`
+  - Google API key `AIza...`
+- **JWT tokens** in `header.payload.signature` form (base64url-ish, common `eyJ` prefix)
+- **Credit card numbers** (13–19 digits, allowing spaces/dashes) validated using the **Luhn algorithm**
+
+Additionally, include patterns for future expansion (even if disabled by default in settings UI):
+- Phone numbers
+- AWS access keys (`AKIA...`)
+- Private key blocks (`-----BEGIN ... PRIVATE KEY----- ... -----END ... PRIVATE KEY-----`)
+
+### 2.5 Findings model
+The detector returns an ordered array of findings:
+- Each finding includes:
+  - `type` (e.g. `email`, `apiKey`, `jwt`, `card`, `phone`, `awsAccessKey`, `privateKey`)
+  - `match` (raw matched text)
+  - `start` / `end` positions (character offsets)
+  - For cards: `normalized` (digits only, no separators)
+- Sort findings ascending by `start`.
+
+### 2.6 Masking
+Provide a `maskText(text, findings)` function that returns the same text but with findings replaced by placeholders:
+- `[HIDDEN_EMAIL]`
+- `[HIDDEN_API_KEY]`
+- `[HIDDEN_JWT]`
+- `[HIDDEN_CARD]`
+- `[HIDDEN_PHONE]`
+- `[HIDDEN_AWS_KEY]`
+- `[HIDDEN_PRIVATE_KEY]`
+- Unknown types fallback to `[HIDDEN]`
+
+Masking must be stable:
+- Iterate through findings left-to-right.
+- Skip overlapping findings (if `finding.start < cursor`).
+
+### 2.7 Field state tracking
+Maintain per-field state with a `WeakMap<Element, State>` storing:
+- `findings`
+- `originalText`
+- `maskedText`
+
+Whenever analysis runs:
+- Compute findings with detector.
+- Filter findings according to enabled scan toggles (email/apiKey/jwt/card).
+- Update `STATE` and render the UI state for that field.
+
+### 2.8 Visual highlight for risky fields
+When field has findings:
+- Set `element.style.outline = "2px solid #b91c1c"`
+- `outlineOffset = "2px"`
+- Set attribute `data-ai-privacy-flagged="true"`
+- Also include a CSS rule to add subtle red glow:
+  - `[data-ai-privacy-flagged="true"] { box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.2); transition: box-shadow 120ms ease; }`
+
+When field is clean:
+- Remove outline styles and attribute.
+- Hide shield UI.
+
+### 2.9 Floating shield UI (always isolated)
+Create a UI manager that injects UI into a `ShadowRoot` mounted on `document.documentElement`.
+Requirements:
+- Root host element id: `ai-privacy-sentinel-root`
+- Use `attachShadow({ mode: "open" })`
+- Inject all UI styles inside the shadow root to avoid site CSS interference.
+
+Shield button:
+- `position: fixed; z-index: 2147483647; pointer-events: auto`
+- Red background `#8b0000`, white text.
+- Displays: `🛡 Найдено: <count>`
+- Positioned near the active field rect:
+  - `top = max(anchorRect.top + scrollY - 44, 8)`
+  - `left = max(anchorRect.right + scrollX - 150, 8)`
+
+### 2.10 Modal behavior (strict/auto-mask-confirm)
+A modal backdrop + card must also live inside the shadow root (same top z-index).
+Modal requirements:
+- Backdrop: semi-transparent dark overlay.
+- Modal card: white background, dark text, rounded corners.
+- Buttons:
+  - Primary “mask & send” (red background).
+  - Secondary “cancel” (neutral background).
+
+Modal must support 2 use-cases:
+1) **Strict mode** (default):
+   - When user tries to send and findings exist, block sending and show modal:
+     - Title: “Potentially sensitive data detected”
+     - Body: a summary string such as “Found: email addresses: 1, API keys: 2. Mask data before sending.”
+     - Primary: “Mask and send”
+     - Secondary: “Cancel”
+2) **Auto-mask with confirmation**:
+   - If auto-mask is enabled and confirm is enabled:
+     - Block send and show modal asking:
+       - “Sensitive data found. Replace it with masks before sending?”
+     - On confirm: mask field, then re-trigger sending.
+
+### 2.11 Intercepting “Send”
+You must intercept both:
+- Click on send buttons:
+  - `SEND_SELECTOR = '[aria-label="Send"], button[type="submit"]'`
+  - Use `document.addEventListener("click", interceptSend, true)`
+  - In handler: `event.target.closest(SEND_SELECTOR)`
+- Enter key for chat inputs:
+  - `document.addEventListener("keydown", handleKeydown, true)`
+  - Only treat as send when:
+    - `event.key === "Enter"`
+    - `!event.shiftKey`
+    - target is a field in `FIELD_SELECTOR`
+
+To identify which field to analyze for a send button:
+- If button is inside a `<form>`, choose the first field within the form that has non-empty text, else fallback to first field.
+- If no form, search all fields similarly.
+
+Blocking rules:
+- If findings exist and:
+  - `autoMask === true`:
+    - If `autoMaskConfirm === true`: block, show confirm modal, then mask and proceed.
+    - Else: mask immediately and allow sending (do not block further).
+  - Else if `strict === true`: block and show strict modal.
+  - Else (soft mode): do not block; only highlight + shield.
+
+When blocking:
+- `event.preventDefault()`
+- `event.stopImmediatePropagation()`
+
+When proceeding after masking:
+- Trigger the send button again via `button.click()` (for click flow).
+- For enter-key flow, after masking you can keep focus in the field (or attempt to trigger send depending on site; minimal behavior is acceptable as long as it doesn’t double-send).
+
+### 2.12 Settings storage
+Store settings in `chrome.storage.sync` under key `"aiPrivacySettings"`.
+Default settings shape:
+
+```js
+{
+  scan: { email: true, apiKey: true, jwt: true, card: true },
+  mode: { strict: true, autoMask: false, autoMaskConfirm: false },
+  scope: { mode: "llm", customHosts: [] }, // "llm" | "global" | "custom"
+  exceptions: { enabled: true, hosts: [/* default list */] }
+}
+```
+
+Merging rules:
+- When loading stored settings, merge into defaults and validate types.
+- Unknown keys are ignored.
+
+### 2.13 Runtime settings application
+Content script must:
+- Load settings at startup (if storage available).
+- Apply settings and only start listeners if the current page is “in scope”.
+
+In-scope logic:
+- If exceptions enabled and current host matches exception list => not in scope.
+- Else:
+  - `scope.mode === "global"` => in scope
+  - `scope.mode === "custom"` => in scope only if host matches customHosts (exact or subdomain)
+  - Otherwise (`"llm"`) => in scope only if host is in LLM host set
+
+### 2.14 Popup behavior (quick status)
+The extension must have a popup showing:
+- Brand name + shield icon
+- Current hostname
+- A pill saying ON/OFF based on the current hostname and settings
+- A short explanation: e.g. “Mode: LLM chats only” or “Exception: analysis disabled for this site.”
+
+Popup implementation notes:
+- Use `chrome.tabs.query({ active: true, currentWindow: true })`
+- Read settings via `chrome.storage.sync.get("aiPrivacySettings")`
+- Use `chrome.scripting.executeScript` to evaluate a function in the tab that returns `window.location.hostname`.
+
+### 2.15 Options page (full settings UI)
+Options page must include:
+- **Scope** radio group (Global / LLM-only / Custom) and a textarea for custom hosts.
+- **Data types** toggles for email/apiKey/jwt/card.
+- **Exceptions** toggle + textarea list.
+- **Pre-send behavior** toggles:
+  - strict mode
+  - auto mask
+  - confirm before auto mask
+- Any change should auto-save to storage and show a small “Settings saved” status message.
+
+---
+## 3) Visual & UX requirements (how it should look)
+
+### 3.1 Popup UI (dark, compact, polished)
+- Size: ~340px width, minimum ~360px height.
+- Dark radial-gradient background (deep navy/black).
+- Header with:
+  - Round shield badge with red gradient and subtle glow
+  - Title “AI-Privacy Sentinel”
+  - Subtitle area that changes based on active state
+  - Status pill “Вкл.”/“Выкл.” style (ON/OFF)
+- Typography: system UI font.
+- Components: cards/sections, subtle borders, muted secondary text.
+
+### 3.2 Options UI (centered panel, modern)
+- Full-page centered card with rounded corners and layered gradients.
+- Sections with consistent spacing and clear labels.
+- Switch toggles styled as iOS-like pill switches.
+- Textareas with dark translucent background and light text.
+- Everything should work in light/dark color-scheme but optimized for dark.
+
+### 3.3 On-page UI (Shadow DOM)
+- Shield button should feel “native” and not be affected by site styling.
+- Modal should be readable, accessible (role dialog, aria-modal), and not break page.
+- Use `pointer-events: none` on full-screen layer, but `pointer-events: auto` on interactive elements.
+
+---
+## 4) Project structure (exact files to create)
+
+Create these files at the project root:
+- `manifest.json`
+- `detector.js`
+- `ui-manager.js`
+- `content.js`
+- `styles.css`
+- `popup.html`
+- `popup.js`
+- `options.html`
+- `options.js`
+- `README.md`
+- `icon-128.png` (can be a placeholder; keep name consistent)
+
+### 4.1 manifest.json (MV3)
+Constraints:
+- `manifest_version: 3`
+- Name: `AI-Privacy Sentinel`
+- Description: “Prevents accidental disclosure of PII and secrets in browser text inputs and LLM chat interfaces.”
+- Permissions: `storage`, `activeTab`
+- Action:
+  - `default_popup: "popup.html"`
+  - `default_title: "AI-Privacy Sentinel"`
+- Options page: `"options_page": "options.html"`
+- Content scripts:
+  - matches: `"<all_urls>"`
+  - js load order: `detector.js`, `ui-manager.js`, `content.js`
+  - css: `styles.css`
+  - run_at: `document_idle`
+- Icons: map 16/32/48/128 to `icon-128.png`
+
+---
+## 5) Implementation blueprint (step-by-step build plan)
+
+### 5.1 Step A — Scaffold extension
+- Create `manifest.json` with MV3 action + options + content scripts.
+- Add placeholder `icon-128.png`.
+- Create bare `popup.html`, `options.html`, and JS files to ensure extension loads.
+
+### 5.2 Step B — Detector module (`detector.js`)
+Implement:
+- Pattern definitions for email/apiKey/jwt/cardCandidate/phone/awsAccessKey/privateKeyBlock.
+- Luhn validation with digit-doubling algorithm.
+- `findSensitiveData(text)` returning findings array.
+- `maskText(text, findings)` applying replacements.
+Expose API on `window.AIPrivacyDetector`.
+
+Acceptance checks:
+- Emails match typical `name@domain.tld`.
+- API key patterns match the prefixes listed.
+- JWT matches three dot-separated segments starting with `eyJ`.
+- Card candidates pass Luhn; reject non-Luhn.
+
+### 5.3 Step C — Shadow DOM UI manager (`ui-manager.js`)
+Implement a `UIManager` class with methods:
+- `ensureRoot()`
+- `showShield(anchorRect, findingCount)`
+- `hideShield()`
+- `showModal(field, findingCount, details, onMask, onCancel)`
+- `hideModal()`
+
+Mount under `#ai-privacy-sentinel-root`.
+Expose as `window.AIPrivacyUI`.
+
+Acceptance checks:
+- Shield appears near field rect and disappears when clean.
+- Modal appears with correct text; buttons invoke callbacks.
+
+### 5.4 Step D — Content script glue (`content.js`)
+Implement:
+- Settings: defaults + merge/validate + load from `chrome.storage.sync`.
+- Scope evaluation (`isPageInScope`).
+- Listener attachment and deduping (`dataset.aiPrivacyBound`).
+- MutationObserver scanning.
+- Field analysis (reads field text, runs detector, filters findings by toggles).
+- UI rendering for field states.
+- Send interception:
+  - click send selector
+  - enter key
+  - strict / auto-mask / confirm logic
+
+Acceptance checks:
+- In LLM-only mode, extension activates only on LLM hosts.
+- In global mode, activates everywhere except exceptions.
+- In custom mode, activates only on allowlist hosts.
+- Highlight + shield appears as you type secrets.
+- In strict mode, sending is blocked until you mask or cancel.
+- In auto-mask mode, secrets are replaced immediately or after confirmation (if enabled).
+
+### 5.5 Step E — Options UI (`options.html` + `options.js`)
+Implement:
+- UI controls with stable IDs (for easy wiring):
+  - scan: `scan-email`, `scan-apiKey`, `scan-jwt`, `scan-card`
+  - mode: `mode-strict`, `auto-mask`, `mode-autoMaskConfirm`
+  - scope radios: `scope-global`, `scope-llm`, `scope-custom`
+  - scope list textarea: `scope-custom-list`
+  - exceptions enabled: `exc-enabled`
+  - exceptions list textarea: `exc-hosts`
+  - status label element id: `status`
+- Load stored settings on init, merge into defaults, populate form.
+- Auto-save on any checkbox/radio change (and also when textarea changes, ideally debounced).
+- Show “Settings saved” or error message.
+
+### 5.6 Step F — Popup UI (`popup.html` + `popup.js`)
+Implement:
+- Read current hostname via scripting injection.
+- Read stored settings.
+- Compute whether extension is active for that hostname using same scope logic as content script.
+- Render:
+  - hostname text
+  - status pill (ON/OFF)
+  - subtitle explaining current mode or exception.
+
+---
+## 6) Edge cases & robustness requirements
+- **Do not crash** if `chrome.storage.sync` is unavailable (fallback to defaults).
+- **Contenteditable**: use `innerText` or `textContent` to read; use `textContent` to set.
+- After programmatically setting field text, dispatch:
+  - `new InputEvent("input", { bubbles: true, composed: true })`
+- Avoid duplicate listeners via `dataset.aiPrivacyBound`.
+- Keep UI isolated via Shadow DOM. Do not leak global CSS.
+
+---
+## 7) Deliverables checklist
+When you are done, ensure:
+- Extension loads via “Load unpacked”.
+- On supported LLM sites, typing an API key/email/JWT/card triggers highlight + shield.
+- Clicking Send (or Enter) triggers strict/auto-mask behavior based on options.
+- Options persist across browsers via `chrome.storage.sync`.
+- Popup reflects correct ON/OFF status for the current tab.
+- No external requests, no dependencies.
+
+---
+## 8) Implementation constraints (do not violate)
+- Vanilla JS only (no frameworks, no bundlers).
+- No network requests; everything runs locally.
+- MV3 compatible.
+- Keep code split exactly as described (detector / UI manager / content / popup / options).
+
+Now implement the project exactly as specified, producing all files listed in the structure section.
+
